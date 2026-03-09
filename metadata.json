@@ -1,0 +1,5 @@
+{
+  "name": "PteroScript Manager",
+  "description": "A comprehensive dashboard for Pterodactyl Panel installation scripts, supporting VPS, Codespaces, and automated theme installation.",
+  "requestFramePermissions": []
+}
