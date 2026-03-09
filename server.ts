@@ -45,7 +45,13 @@ else
     SUDO=""
 fi
 
-$SUDO apt-get update
+# Fix common GPG issues in Codespaces (Yarn key)
+if [ "$ENV_TYPE" = "codespace" ]; then
+    echo "Fixing GPG keys..."
+    $SUDO apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 62D54FD4003F6525 2>/dev/null || true
+fi
+
+$SUDO apt-get update || true
 $SUDO apt-get install -y curl tar unzip git php-cli php-common php-mbstring php-gd php-xml php-bcmath php-curl
 
 # Docker Install (if needed)
