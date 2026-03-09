@@ -39,21 +39,29 @@ fi
 
 # Basic Dependencies
 echo "Installing dependencies..."
-apt-get update
-apt-get install -y curl tar unzip git php-cli php-common php-mbstring php-gd php-xml php-bcmath php-curl
+if [ "$(id -u)" -ne 0 ]; then
+    SUDO="sudo"
+else
+    SUDO=""
+fi
+
+$SUDO apt-get update
+$SUDO apt-get install -y curl tar unzip git php-cli php-common php-mbstring php-gd php-xml php-bcmath php-curl
 
 # Docker Install (if needed)
 if ! command -v docker &> /dev/null; then
     echo "Installing Docker..."
     curl -sSL https://get.docker.com/ | CHANNEL=stable bash
-    systemctl enable --now docker
+    if command -v systemctl &> /dev/null; then
+        $SUDO systemctl enable --now docker
+    fi
 fi
 
 # Docker Compose
 if ! command -v docker-compose &> /dev/null; then
     echo "Installing Docker Compose..."
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    $SUDO curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    $SUDO chmod +x /usr/local/bin/docker-compose
 fi
 
 # Panel setup logic
