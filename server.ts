@@ -65,19 +65,36 @@ if ! command -v docker-compose &> /dev/null; then
 fi
 
 # Panel setup logic
-echo "Setting up Pterodactyl Panel..."
+echo "Setting up Pterodactyl Panel with Docker Compose..."
+INSTALL_DIR="/var/www/pterodactyl"
+if [ "$ENV_TYPE" = "codespace" ]; then
+    INSTALL_DIR=$(pwd)/panel
+fi
+
+$SUDO mkdir -p "$INSTALL_DIR"
+cd "$INSTALL_DIR"
+
+if [ ! -f "docker-compose.yml" ]; then
+    echo "Downloading Docker Compose configuration..."
+    $SUDO curl -L https://raw.githubusercontent.com/pterodactyl/panel/master/docker-compose.example.yml -o docker-compose.yml
+fi
+
 if [ "$ENV_TYPE" = "codespace" ]; then
     echo "Configuring for Codespace access..."
-    # Auto-detect the URL for port 80
     CS_URL="https://\${CODESPACE_NAME}-80.\${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
     echo "Setting APP_URL to: $CS_URL"
     
-    if [ -f ".env" ]; then
-        sed -i "s|APP_URL=.*|APP_URL=$CS_URL|" .env
-    else
-        echo "APP_URL=$CS_URL" >> .env
+    # Create .env if it doesn't exist from example
+    if [ ! -f ".env" ]; then
+        $SUDO touch .env
     fi
+    
+    $SUDO sed -i "s|APP_URL=.*|APP_URL=$CS_URL|" .env || echo "APP_URL=$CS_URL" | $SUDO tee -a .env
 fi
+
+echo "Starting Pterodactyl Panel via Docker Compose..."
+$SUDO docker-compose pull
+$SUDO docker-compose up -d
 
 echo "Panel setup complete."
 
@@ -120,15 +137,20 @@ fi
 
 # Rebuild assets if theme or background was changed
 if [ ! -z "$THEME_URL" ] || [ ! -z "$BG_IMAGE_URL" ]; then
-    echo "--- Rebuilding Assets ---"
-    export NODE_OPTIONS=--max_old_space_size=4096
-    if command -v npm &> /dev/null; then
-        npm install
-        npm run build:production
+    if [ -f "package.json" ]; then
+        echo "--- Rebuilding Assets ---"
+        export NODE_OPTIONS=--max_old_space_size=4096
+        if command -v npm &> /dev/null; then
+            $SUDO npm install
+            $SUDO npm run build:production
+        else
+            echo "NPM not found, skipping asset build. Please run manually."
+        fi
+        echo "Theme/Background applied successfully!"
     else
-        echo "NPM not found, skipping asset build. Please run manually."
+        echo "Warning: package.json not found in $(pwd). Skipping asset build."
+        echo "Make sure you are running this script inside the Pterodactyl directory."
     fi
-    echo "Theme/Background applied successfully!"
 fi
 
 echo "Setup complete. You can now run: docker-compose up -d"
@@ -206,20 +228,8 @@ echo "${themeId} theme files applied."
 
     const targetUrl = themeMap[req.params.id];
     if (targetUrl) {
-      try {
-        const response = await fetch(targetUrl);
-        if (!response.ok) throw new Error(`Failed to fetch theme: ${response.statusText}`);
-        
-        const contentType = response.headers.get("content-type") || "application/zip";
-        res.setHeader("Content-Type", contentType);
-        res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.zip"`);
-        
-        const arrayBuffer = await response.arrayBuffer();
-        res.send(Buffer.from(arrayBuffer));
-      } catch (error) {
-        console.error("Error proxying theme:", error);
-        res.status(500).send("Error downloading theme from source");
-      }
+      // Redirect directly to GitHub to avoid proxy issues and memory limits
+      res.redirect(targetUrl);
     } else {
       res.status(404).send("Theme not found");
     }
