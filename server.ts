@@ -1,12 +1,10 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 
 async function createServer() {
   const app = express();
-  const PORT = 3000;
 
-  // Mock script data - in a real app these could be in a database or files
+  // Mock script data
   const scripts: Record<string, string> = {
     install: `#!/bin/bash
 # Pterodactyl Auto Installer Script (with Theme & BG Support)
@@ -208,7 +206,6 @@ echo "${themeId} theme files applied."
         res.setHeader("Content-Type", contentType);
         res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.zip"`);
         
-        // Stream the response
         const arrayBuffer = await response.arrayBuffer();
         res.send(Buffer.from(arrayBuffer));
       } catch (error) {
@@ -233,22 +230,27 @@ echo "${themeId} theme files applied."
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("Vite not found, skipping middleware");
+    }
   } else {
-    // In Vercel/Production, static files are handled by Vercel's static routing
-    // but we keep this for local production testing
+    // Production static serving (for local testing, Vercel uses vercel.json)
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res, next) => {
-      // If it's an API or script route, don't serve index.html
       if (req.path.startsWith('/api/') || req.path.startsWith('/s/') || req.path.startsWith('/t/')) {
         return next();
       }
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(distPath, "index.html"), (err) => {
+        if (err) next();
+      });
     });
   }
 
