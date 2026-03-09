@@ -2,7 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 
-async function startServer() {
+async function createServer() {
   const app = express();
   const PORT = 3000;
 
@@ -132,7 +132,14 @@ echo "Setup complete. You can now run: docker-compose up -d"
     optimize: `# Optimize script removed`
   };
 
-  const APP_URL = (process.env.APP_URL || "").replace(/\/$/, "");
+  let APP_URL = process.env.APP_URL || "";
+  
+  // Fallback for Vercel environment
+  if (!APP_URL && process.env.VERCEL_URL) {
+    APP_URL = `https://${process.env.VERCEL_URL}`;
+  }
+  
+  APP_URL = APP_URL.replace(/\/$/, "");
 
   // API Route to get script list for the UI
   app.get("/api/scripts", (req, res) => {
@@ -232,15 +239,36 @@ echo "${themeId} theme files applied."
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(process.cwd(), "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+    // In Vercel/Production, static files are handled by Vercel's static routing
+    // but we keep this for local production testing
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res, next) => {
+      // If it's an API or script route, don't serve index.html
+      if (req.path.startsWith('/api/') || req.path.startsWith('/s/') || req.path.startsWith('/t/')) {
+        return next();
+      }
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  return app;
+}
+
+const appPromise = createServer();
+
+// For local development
+if (process.env.NODE_ENV !== "production") {
+  appPromise.then(app => {
+    const PORT = 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
   });
 }
 
-startServer();
+// Export for Vercel
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  return app(req, res);
+};
