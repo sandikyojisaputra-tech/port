@@ -239,6 +239,37 @@ export default function App() {
                         </div>
 
                         {selectedScript.id === 'install' && (
+                          <div className="mt-8 p-6 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-4">
+                            <h3 className="text-sm font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                              <Terminal className="w-4 h-4 text-blue-400" /> Post-Installation Commands
+                            </h3>
+                            <p className="text-xs text-zinc-500">Run these commands inside your terminal after the script finishes to complete the setup:</p>
+                            
+                            <div className="space-y-3">
+                              {[
+                                { label: 'Go to Directory', cmd: `cd ${appUrl.includes('github.dev') ? 'panel' : '/var/www/pterodactyl'}` },
+                                { label: 'Generate App Key', cmd: 'sudo docker-compose exec panel php artisan key:generate --force' },
+                                { label: 'Run Migrations', cmd: 'sudo docker-compose exec panel php artisan migrate --seed --force' },
+                                { label: 'Create Admin User', cmd: 'sudo docker-compose exec panel php artisan p:user:make' }
+                              ].map((step, i) => (
+                                <div key={i} className="flex flex-col gap-1.5">
+                                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-tighter">{step.label}</span>
+                                  <div className="flex items-center justify-between p-2 bg-black rounded border border-zinc-800 font-mono text-xs">
+                                    <code className="text-zinc-300 truncate mr-2">{step.cmd}</code>
+                                    <button 
+                                      onClick={() => copyToClipboard(step.cmd, `step-${i}`)}
+                                      className="text-zinc-500 hover:text-white"
+                                    >
+                                      {copied === `step-${i}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedScript.id === 'install' && (
                           <div className="mt-10 space-y-6">
                             <div className="flex items-center justify-between">
                               <h3 className="text-sm font-semibold uppercase tracking-widest text-zinc-500 flex items-center gap-2">

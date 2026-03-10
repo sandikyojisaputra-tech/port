@@ -87,7 +87,12 @@ fi
 
 if [ "$ENV_TYPE" = "codespace" ]; then
     echo "Configuring for Codespace access..."
-    CS_URL="https://\${CODESPACE_NAME}-80.\${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
+    # Try to get codespace name from environment or current folder
+    CP_NAME="\${CODESPACE_NAME}"
+    if [ -z "$CP_NAME" ]; then
+        CP_NAME=$(hostname)
+    fi
+    CS_URL="https://\${CP_NAME}-80.\${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
     echo "Setting APP_URL to: $CS_URL"
     
     # Create .env if it doesn't exist from example
@@ -110,14 +115,24 @@ if [ "$ENV_TYPE" = "codespace" ]; then
 fi
 
 echo "Waiting for database to be ready (this may take a minute)..."
+# Detect if service is named 'db' or 'database'
+DB_SERVICE="database"
+if ! $SUDO docker-compose ps database > /dev/null 2>&1; then
+    if $SUDO docker-compose ps db > /dev/null 2>&1; then
+        DB_SERVICE="db"
+    fi
+fi
+
+echo "Detected database service name: $DB_SERVICE"
+
 # Wait for the database container to be fully up and running
 MAX_RETRIES=60
 COUNT=0
-until $SUDO docker-compose ps db | grep -q "Up" && $SUDO docker-compose exec -T db mysqladmin ping -h"localhost" --silent || [ $COUNT -eq $MAX_RETRIES ]; do
+until $SUDO docker-compose ps "$DB_SERVICE" | grep -q "Up" && $SUDO docker-compose exec -T "$DB_SERVICE" mysqladmin ping -h"localhost" --silent || [ $COUNT -eq $MAX_RETRIES ]; do
     echo "Waiting for database connection... ($((COUNT+1))/$MAX_RETRIES)"
     # If container is not running, try to start it again
-    if ! $SUDO docker-compose ps db | grep -q "Up"; then
-        $SUDO docker-compose up -d db
+    if ! $SUDO docker-compose ps "$DB_SERVICE" | grep -q "Up"; then
+        $SUDO docker-compose up -d "$DB_SERVICE"
     fi
     sleep 5
     COUNT=$((COUNT+1))
