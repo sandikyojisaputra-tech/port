@@ -102,12 +102,23 @@ echo "Starting Pterodactyl Panel via Docker Compose..."
 $SUDO docker-compose pull
 $SUDO docker-compose up -d
 
+# Create symlink so hardcoded theme scripts work
+if [ "$ENV_TYPE" = "codespace" ]; then
+    echo "Creating symlink for theme script compatibility..."
+    $SUDO mkdir -p /var/www
+    $SUDO ln -sfn "$INSTALL_DIR" /var/www/pterodactyl
+fi
+
 echo "Waiting for database to be ready (this may take a minute)..."
 # Wait for the database container to be fully up and running
-MAX_RETRIES=30
+MAX_RETRIES=60
 COUNT=0
-until $SUDO docker-compose exec -T db mysqladmin ping -h"localhost" --silent || [ $COUNT -eq $MAX_RETRIES ]; do
+until $SUDO docker-compose ps db | grep -q "Up" && $SUDO docker-compose exec -T db mysqladmin ping -h"localhost" --silent || [ $COUNT -eq $MAX_RETRIES ]; do
     echo "Waiting for database connection... ($((COUNT+1))/$MAX_RETRIES)"
+    # If container is not running, try to start it again
+    if ! $SUDO docker-compose ps db | grep -q "Up"; then
+        $SUDO docker-compose up -d db
+    fi
     sleep 5
     COUNT=$((COUNT+1))
 done
@@ -115,13 +126,17 @@ done
 if [ $COUNT -eq $MAX_RETRIES ]; then
     echo "Error: Database took too long to start. Please check logs with 'docker-compose logs db'"
 else
-    echo "Database is ready! Running final setup commands..."
+    echo "Database is ready! Waiting 10 seconds for final initialization..."
+    sleep 10
     
     echo "Generating Application Key..."
     $SUDO docker-compose exec -T panel php artisan key:generate --force
     
-    echo "Running Database Migrations..."
-    $SUDO docker-compose exec -T panel php artisan migrate --force
+    echo "Running Database Migrations and Seeding..."
+    # Run migrations and seed (seeding is often required for initial setup)
+    # We run it twice to ensure any dependency issues are resolved
+    $SUDO docker-compose exec -T panel php artisan migrate --seed --force || \
+    (echo "Retrying migration..." && sleep 5 && $SUDO docker-compose exec -T panel php artisan migrate --seed --force)
     
     echo ""
     echo "--- INSTALLATION COMPLETE ---"
@@ -130,6 +145,9 @@ else
     echo "FINAL STEP: You must create an admin user manually:"
     echo "1. cd $INSTALL_DIR"
     echo "2. $SUDO docker-compose exec panel php artisan p:user:make"
+    echo ""
+    echo "If you still see 'Table not found' errors, try running migrations again manually:"
+    echo "   $SUDO docker-compose exec panel php artisan migrate --force"
     echo ""
     echo "Panel URL:"
     if [ "$ENV_TYPE" = "codespace" ]; then
