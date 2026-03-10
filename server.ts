@@ -102,7 +102,43 @@ echo "Starting Pterodactyl Panel via Docker Compose..."
 $SUDO docker-compose pull
 $SUDO docker-compose up -d
 
-echo "Panel setup complete."
+echo "Waiting for database to be ready (this may take a minute)..."
+# Wait for the database container to be fully up and running
+MAX_RETRIES=30
+COUNT=0
+until $SUDO docker-compose exec -T db mysqladmin ping -h"localhost" --silent || [ $COUNT -eq $MAX_RETRIES ]; do
+    echo "Waiting for database connection... ($((COUNT+1))/$MAX_RETRIES)"
+    sleep 5
+    COUNT=$((COUNT+1))
+done
+
+if [ $COUNT -eq $MAX_RETRIES ]; then
+    echo "Error: Database took too long to start. Please check logs with 'docker-compose logs db'"
+else
+    echo "Database is ready! Running final setup commands..."
+    
+    echo "Generating Application Key..."
+    $SUDO docker-compose exec -T panel php artisan key:generate --force
+    
+    echo "Running Database Migrations..."
+    $SUDO docker-compose exec -T panel php artisan migrate --force
+    
+    echo ""
+    echo "--- INSTALLATION COMPLETE ---"
+    echo "Your panel is now running!"
+    echo ""
+    echo "FINAL STEP: You must create an admin user manually:"
+    echo "1. cd $INSTALL_DIR"
+    echo "2. $SUDO docker-compose exec panel php artisan p:user:make"
+    echo ""
+    echo "Panel URL:"
+    if [ "$ENV_TYPE" = "codespace" ]; then
+        echo "   $CS_URL"
+    else
+        echo "   http://your-vps-ip"
+    fi
+    echo "----------------------------"
+fi
 
 # Theme/Background Installation
 PTERO_PATH="/var/www/pterodactyl"
