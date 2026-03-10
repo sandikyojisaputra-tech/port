@@ -111,15 +111,23 @@ $SUDO docker-compose up -d
 if [ "$ENV_TYPE" = "codespace" ]; then
     echo "Creating symlink for theme script compatibility..."
     $SUDO mkdir -p /var/www
-    $SUDO ln -sfn "$INSTALL_DIR" /var/www/pterodactyl
+    # Use absolute path for symlink
+    $SUDO ln -sfn "$(pwd)" /var/www/pterodactyl
 fi
 
 echo "Waiting for database to be ready (this may take a minute)..."
-# Detect if service is named 'db' or 'database'
-DB_SERVICE="database"
-if ! $SUDO docker-compose ps database > /dev/null 2>&1; then
-    if $SUDO docker-compose ps db > /dev/null 2>&1; then
-        DB_SERVICE="db"
+# Detect if service is named 'db' or 'database' by checking the docker-compose.yml file directly
+if grep -q "database:" docker-compose.yml; then
+    DB_SERVICE="database"
+elif grep -q "db:" docker-compose.yml; then
+    DB_SERVICE="db"
+else
+    # Fallback to checking running services if grep fails
+    DB_SERVICE="database"
+    if ! $SUDO docker-compose ps database > /dev/null 2>&1; then
+        if $SUDO docker-compose ps db > /dev/null 2>&1; then
+            DB_SERVICE="db"
+        fi
     fi
 fi
 
